@@ -20,6 +20,13 @@ CREATE TABLE  tai_pruebas.PUESTOS
     PRIMARY KEY ( ID )
 );
 
+--Crear tabla “DEPARTAMENTOS”:
+CREATE TABLE  tai_pruebas.DEPARTAMENTOS 
+(
+    ID_DEPARTAMENTO  SERIAL, 
+    NOMBRE_DEPARTAMENTO VARCHAR(30), 
+    PRIMARY KEY ( ID_DEPARTAMENTO )
+);
 
 --Crear tabla “EMPLEADOS”:
 CREATE TABLE  tai_pruebas.EMPLEADOS 
@@ -85,13 +92,17 @@ CREATE TRIGGER insert_empleados_trigger
 INSERT INTO  tai_pruebas.PUESTOS  ( NOMBRE_PUESTO ,  SUELDO ) VALUES ('DIRECTOR', 4000), ('SUBDIRECTOR', 3500), ('EJECUTIVO', 2500),
 ('DIRECTIVO', 2000), ('ADMINISTRATIVO', 1000), ('ESCAQUEO',100), ('SUBCONTRATA',500);
 
+--INSERTAR VALORES EN LA TABLA DEPARTAMENTOS:
+INSERT INTO  tai_pruebas.DEPARTAMENTOS  ( NOMBRE_DEPARTAMENTO )
+VALUES ('INFORMATICA'), ('CONTABILIDAD'), ('COMERCIAL'), ('RECURSOS HUMANOS'),('FORMACION'),('DIRECCION');
+
 --INSERTAR VALORES EN LA TABLA EMPLEADOS:
-INSERT INTO tai_pruebas.EMPLEADOS(NOMBRE, APELLIDOS, DNI, ID_PUESTO, FECHA_INGRESO) VALUES ('JOSÉ', 'LÓPEZ PÉREZ', '40.123.456M',  1,'1995-05-31'), 
-('JUAN', 'SUÁREZ DE LA MORENA', '02.451.036J',  4,'1998-10-25'), ('SARA', 'SÁNCHEZ GARCÍA', '34.452.198T', 5,'1999-12-31'), 
-('JAVIER', 'MORENO MONTERO', '07.894.368S',  2,'2000-01-01'), ('CATALINA', 'ROMERO DE LA SERNA', '50.421.369J',  3,'2005-06-15'), 
-('BELÉN', 'CASTILLO MARTÍNEZ', '09.456.879F',  4,'2010-12-12'), ('JUAN JOSE', 'GARCIA SOTO', '52.459.603V',  5,'2010-01-01'), 
-('JOSÉ', 'LÓPEZ PÉREZ', '36.123.784K',  5,'2011-01-01'), ('SILVIA', 'GARCÍA MARTÍN', '02.451.123S',  5,'2012-04-04'), 
-('ARACELI', 'MONTERO MUÑOZ', '30.259.788U',  5,'2017-01-05');
+INSERT INTO tai_pruebas.EMPLEADOS(NOMBRE, APELLIDOS, DNI, ID_PUESTO, ID_DEPARTAMENTO, FECHA_INGRESO) VALUES ('JOSÉ', 'LÓPEZ PÉREZ', '40.123.456M',  1, 6,'1995-05-31'), 
+('JUAN', 'SUÁREZ DE LA MORENA', '02.451.036J',  4, 6,'1998-10-25'), ('SARA', 'SÁNCHEZ GARCÍA', '34.452.198T', 5, 3,'1999-12-31'), 
+('JAVIER', 'MORENO MONTERO', '07.894.368S',  2, 6,'2000-01-01'), ('CATALINA', 'ROMERO DE LA SERNA', '50.421.369J',  3, 6,'2005-06-15'), 
+('BELÉN', 'CASTILLO MARTÍNEZ', '09.456.879F',  4, 6,'2010-12-12'), ('JUAN JOSE', 'GARCIA SOTO', '52.459.603V',  5, 3,'2010-01-01'), 
+('JOSÉ', 'LÓPEZ PÉREZ', '36.123.784K',  5, 3,'2011-01-01'), ('SILVIA', 'GARCÍA MARTÍN', '02.451.123S',  5, 3,'2012-04-04'), 
+('ARACELI', 'MONTERO MUÑOZ', '30.259.788U',  5, 3,'2017-01-05');
 
 -- Consultas con joins
 
@@ -118,4 +129,42 @@ FROM tai_pruebas.Empleados E CROSS JOIN tai_pruebas.Puestos P;
 SELECT * FROM tai_pruebas.empleados E LEFT JOIN tai_pruebas.puestos P on E.id_puesto = P.id; 
 -- RIGHT JOIN  retorna todos los valores de la tabla derecha con los valores de la tabla de la izquierda correspondientes, si los hay, o retorna un valor nulo NULL
 SELECT * FROM tai_pruebas.empleados E RIGHT JOIN tai_pruebas.puestos P on E.id_puesto = P.id;
+
+-- FULL JOIN retorna los valores no presentes en ambas tablas completando con null los campos respectivos ausentes
+SELECT * FROM tai_pruebas.empleados E FULL JOIN tai_pruebas.puestos P on E.id_puesto = P.id;
+-- En este caso una de las tablas presenta FK y nunca tendrá registros en el que aparezca un identificador no contemplado en la otra tabla
+
+-- FUNCIONES VENTANA
+-- Función base
+Select E.DNI, E.Nombre, E.Apellidos, E.Id_departamento, EXTRACT(YEAR FROM age(timestamp 'now()',date(fecha_ingreso) ) ) as antiguedad 
+FROM tai_pruebas.Empleados E 
+ORDER BY E.ID_departamento;
+-- Modo estándar
+Select E.DNI, E.Nombre, E.Apellidos, E.Id_departamento, EXTRACT(YEAR FROM age(timestamp 'now()',date(fecha_ingreso) ) ) as antiguedad, 
+		avg(EXTRACT(YEAR FROM age(timestamp 'now()',date(fecha_ingreso) ) )) over (partition by Id_departamento) as media_edad
+FROM tai_pruebas.Empleados E 
+ORDER BY E.ID_departamento;
+-- Implementando ventana
+Select E.DNI, E.Nombre, E.Apellidos, E.Id_departamento, EXTRACT(YEAR FROM age(timestamp 'now()',date(fecha_ingreso) ) ) as antiguedad, 
+		avg(EXTRACT(YEAR FROM age(timestamp 'now()',date(fecha_ingreso) ) )) OVER VENTANA_DEPARTAMENTO as media_edad
+FROM tai_pruebas.Empleados E
+WINDOW ventana_departamento as (partition by Id_departamento)
+ORDER BY E.ID_departamento;
+
+--Funciones LATERALES
+-- Consulta base
+Select E.DNI, E.Nombre, E.Apellidos, E.Id_departamento, 
+        CAST(EXTRACT(YEAR FROM age(timestamp 'now()',date(fecha_ingreso))) as int) as antiguedad,
+        P.sueldo
+FROM tai_pruebas.Empleados E, tai_pruebas.Puestos P 
+WHERE E.id_puesto = P.id
+ORDER BY E.ID_departamento;
+
+-- Implementando funciones laterales
+Select E.DNI, E.Nombre, E.Apellidos, E.Id_departamento, S.antiguedad, P.sueldo as sueldo_base, 
+        CAST((P.sueldo + CAST( (antiguedad/100)as decimal(4,2)) * P.sueldo ) as decimal(6,2))as ACTUAL
+FROM tai_pruebas.Empleados E, tai_pruebas.Puestos P, 
+        LATERAL (select CAST( EXTRACT(YEAR FROM age(timestamp 'now()',date(fecha_ingreso))) as decimal(5,0)) ) as S(antiguedad)
+WHERE E.id_puesto = P.id
+ORDER BY E.ID_departamento;
 
